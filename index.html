@@ -2762,15 +2762,18 @@ function parseOBDLine(line){
     if(tEl)tEl.style.color=tColor;
     if(tCard)tCard.style.borderColor=obdTempActual>108?'rgba(232,85,85,.5)':obdTempActual>100?'rgba(240,148,74,.3)':'var(--border)';
 
-} else if(pid==='11'){
+} else if(pid==='11'){} else if(pid==='11'){
     // Posición del acelerador (0 a 100%)
     obdThrottleActual = (a * 100) / 255;
-} else if(pid==='10'){
+  } else if(pid==='10'){
+    // MAF = (A*256+B) / 100  en g/s
     obdMafActual=(a*256+b)/100;
 
+    // Consumo instantáneo L/100 desde MAF
     if(obdVelActual>3 && obdMafActual>0){
       obdConsActual=Math.min((obdMafActual/(OBD_AFR*OBD_DENS*1000))*3600/obdVelActual*100, 50);
-      obdConsAcc+=obdConsActual;obdConsCnt++;
+      obdConsAcc+=obdConsActual;
+      obdConsCnt++;
 
       // LOG MATEMÁTICO: Nos dirá si el MAF escupe basura
       console.debug("⛽ MAF → Consumo", {
@@ -2782,8 +2785,12 @@ function parseOBDLine(line){
       obdConsActual=0;
     }
 
+    // Media en tiempo real (estimada visualmente)
     let distEst = 0;
-    if (obdVelCnt > 0) distEst = (obdVelAcc / obdVelCnt) * (obdVelCnt / 3600);
+    if (obdVelCnt > 0 && obdStartTime) {
+      const horas = (new Date() - obdStartTime) / 3600000;
+      distEst = (obdVelAcc / obdVelCnt) * horas; 
+    }
     const consMed = (distEst > 0.05) ? (obdLitrosTotais / distEst) * 100 : 0;
 
     // DETECCIÓN CUTOFF AFINADA PARA ASTRA H (Z16XEP)
@@ -2791,21 +2798,8 @@ function parseOBDLine(line){
     // Además, exigimos ir a más de 5km/h y por encima del ralentí (>1100 RPM).
     const enCutoff = obdRpmActual > 1100 && obdThrottleActual < 22.0 && obdVelActual > 5;
     obdEnCutoff = enCutoff;
-    } else if(obdVelActual<=3){
-      obdConsActual=0;
-    }
-    // Media en tiempo real: (litros acumulados hasta ahora / distancia GPS) * 100
-    // Como la distancia GPS tarda en actualizarse, usamos una estimación
-    let distEst = 0;
-    if (obdVelCnt > 0) distEst = (obdVelAcc / obdVelCnt) * (obdVelCnt / 3600); // km/h media * horas
-    const consMed = (distEst > 0.05) ? (obdLitrosTotais / distEst) * 100 : 0;
 
-  // Detección corte de combustible
-    // Z16XEP: RPM > 1050, MAF < 2 g/s, velocidad > 0
-    const enCutoff = obdRpmActual > 1050 && obdThrottleActual < 1.0 && obdVelActual > 0;
-    obdEnCutoff = enCutoff;
-
-    // Indicador cutoff
+    // Indicador cutoff visual
     const cutEl=document.getElementById('dash-cutoff-active');
     const cutCard=document.getElementById('dash-cutoff-card');
     if(cutEl){
@@ -2816,6 +2810,7 @@ function parseOBDLine(line){
     // Mostrar consumos
     d('dash-cons-inst',obdConsActual>0?obdConsActual.toFixed(1):'—');
     d('dash-cons-med',consMed>0?consMed.toFixed(1):'—');
+
     // Color consumo instantáneo
     const ciEl=document.getElementById('dash-cons-inst');
     if(ciEl)ciEl.style.color=obdConsActual>10?'var(--red)':obdConsActual>7?'var(--orange)':obdConsActual>0?'var(--green)':'var(--text2)';
